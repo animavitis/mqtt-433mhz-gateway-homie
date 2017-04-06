@@ -3,16 +3,17 @@
 #include <RCSwitch.h>
 #include <DHT.h>
 
-#define RF_EMITTER_PIN 12 //put 4 = D2 on nodemcu, 4 = D4 on arduino
-#define RF_RECEIVER_PIN 5 //  5 = D1 on nodemcu
+#define RF_EMITTER_PIN 12
+#define RF_RECEIVER_PIN 5
 #define RF_EMITTER_REPEAT 20
-#define IR_EMITTER_PIN 14 // 14 = D5 on nodemcu #define only usefull for ESP8266
+#define IR_EMITTER_PIN 14
 #define IR_RECEIVER_PIN 2
-#define DHTPIN 4 // NodeMCU specific PIN mapping
-#define DHTTYPE DHT11
-#define DHTINTERVAL 60
-#define ALARMINTERVAL 60
-#define time_avoid_duplicate 3
+#define DHT_PIN 4
+#define DHT_TYPE DHT11
+#define DHT_INTERVAL 60                 // in seconds
+#define ALARM_INTERVAL 60               // in seconds
+#define TIME_AVOID_DUPLICATE 3          // in seconds
+#define TIME_TO_TRIGGER 30              // in seconds
 
 // Alarm
 String ReceivedSignal[10][3] ={{"0", "0", "N/A"},{"0", "0", "N/A"},{"0", "0", "N/A"},{"0", "0", "N/A"},{"0", "0", "N/A"},
@@ -25,13 +26,13 @@ long lastArmedAwayTime = 0;
 long lastDisarmedTime = 0;
 long lastTriggeredTime = 0;
 long PendingCounter = 0;
-long TimeToTrigger = 30000;
 long initialAlarmState = 0;
 long initialAlarmStateTime = 0;
-#define SENSORARRAYAWAY_SIZE 2
-#define SENSORARRAYHOME_SIZE 1
-unsigned long SENSORARRAYAWAY [SENSORARRAYAWAY_SIZE] = {13980949,2025705};
-unsigned long SENSORARRAYHOME [SENSORARRAYHOME_SIZE] = {2025705};
+
+#define SENSOR_ARRAY_AWAY_SIZE 2
+#define SENSOR_ARRAY_HOME_SIZE 1
+unsigned long sensorArrayAway [SENSOR_ARRAY_AWAY_SIZE] = {13980949,2025705};
+unsigned long sensorArrayHome [SENSOR_ARRAY_HOME_SIZE] = {2025705};
 
 // RF Switch
 RCSwitch mySwitch = RCSwitch();
@@ -42,7 +43,7 @@ IRsend irsend(IR_EMITTER_PIN);
 decode_results results;
 
 // DHT temp sensor
-DHT dht(DHTPIN, DHTTYPE);
+DHT dht(DHT_PIN, DHT_TYPE);
 unsigned long DHTlastSent = 0;
 
 // homie nodes & settings
@@ -57,12 +58,13 @@ HomieNode temperatureNode("DHT", "temperature");
 // HomieSetting<double> temperatureOffsetSetting("temperatureOffset", "The temperature offset in degrees");
 HomieSetting<const char*> channelMappingSetting("channels", "Mapping of 433MHz & IR signals to mqtt channel.");
 
+
 void setupHandler() {
         temperatureNode.setProperty("unit").send("C");
 }
 void loopHandler() {
-//Alarm loop //disarmed//armed_home//armed_away//pending//triggered
-        if (millis() > (initialAlarmStateTime + ALARMINTERVAL * 1000UL) || initialAlarmState == 0) {
+//Alarm loop
+        if (millis() > (initialAlarmStateTime + ALARM_INTERVAL * 1000UL) || initialAlarmState == 0) {
                 initialAlarmStateTime = millis();
                 alarmNode.setProperty("state").send(alarmState);
                 initialAlarmState = 1;
@@ -73,7 +75,7 @@ void loopHandler() {
         pendingCheck();
         triggeredCheck();
 // DHT temp loop
-        if (millis() - DHTlastSent >= DHTINTERVAL * 1000UL || DHTlastSent == 0) {
+        if (millis() - DHTlastSent >= DHT_INTERVAL * 1000UL || DHTlastSent == 0) {
                 float humidity = dht.readHumidity();
                 float temperature = dht.readTemperature();
                 float heatIndex = dht.computeHeatIndex(temperature, humidity, false);
@@ -174,7 +176,7 @@ boolean isAduplicate(String value){
         for (int i=0; i<10; i++) {
                 if (ReceivedSignal[i][0] = value) {
                         long now = millis();
-                        if (now - ReceivedSignal[i][1].toInt() < time_avoid_duplicate * 1000UL) { // change
+                        if (now - ReceivedSignal[i][1].toInt() < TIME_AVOID_DUPLICATE * 1000UL) { // change
                                 Serial << "don't send the received code" << endl;
                                 return true;
                         }
@@ -202,7 +204,6 @@ bool rfSwitchOnHandler(const HomieRange & range, const String & value) {
 bool alarmSwitchOnHandler(const HomieRange & range, const String & value) {
         String data = value.c_str();
         Serial << "Receiving MQTT alarm signal: " << data << endl;
-        alarmNode.setProperty("state").send(data);
         setAlarmState(data);
         return true;
 }

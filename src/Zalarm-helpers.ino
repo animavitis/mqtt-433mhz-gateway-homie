@@ -24,6 +24,7 @@ void setAlarmState(String value){
                 alarmState = alarmStates[3];
                 alarmStateTarget = alarmStateOld;
                 pendingCounter = millis();
+                pendingStatusSent = false;
         }
         if (value == "triggered") {
                 alarmStateOld = alarmState;
@@ -48,9 +49,9 @@ void disarmCheck(){
 void homeCheck(){
         if (alarmState == alarmStates[1]) {
                 lastArmedHomeTime = millis();
-                for (size_t i = 0; i < SENSOR_ARRAY_HOME_SIZE; i++) {
+                for (size_t i = 0; i < 10; i++) {
                         for (size_t j = 0; j < 10; j++) {
-                                if (ReceivedSignal[j][0].toInt() == sensorArrayHome[i] &&
+                                if (ReceivedSignal[j][0].toInt() == arrayHome[i] &&
                                     ReceivedSignal[j][1].toInt()  < lastArmedHomeTime &&
                                     ReceivedSignal[j][1].toInt()  > lastDisarmedTime &&
                                     ReceivedSignal[j][1].toInt()  > lastArmedAwayTime &&
@@ -70,20 +71,25 @@ void homeCheck(){
 void awayCheck(){
         if (alarmState == alarmStates[2]) {
                 lastArmedAwayTime = millis();
-                for (size_t i = 0; i < SENSOR_ARRAY_AWAY_SIZE; i++) {
+                for (size_t i = 0; i < 10; i++) {
                         for (size_t j = 0; j < 10; j++) {
-                                if (ReceivedSignal[j][0].toInt() == sensorArrayHome[i] &&
-                                    ReceivedSignal[j][1].toInt()  < lastArmedHomeTime &&
-                                    ReceivedSignal[j][1].toInt()  > lastDisarmedTime &&
-                                    ReceivedSignal[j][1].toInt()  > lastArmedAwayTime &&
-                                    ReceivedSignal[j][1].toInt()  > lastPendingTime
+                                 // Serial << ReceivedSignal[j][0].toInt() == arrayAway[i] << " if2 " << ReceivedSignal[j][1].toInt()  > lastArmedAwayTime << " arrayaway " << arrayAway[i] << " timestamp " << lastArmedAwayTime << endl;
+                                if (arrayAway[i] > 0 &&
+                                  ReceivedSignal[j][0].toInt() == arrayAway[i] &&
+                                      ReceivedSignal[j][1].toInt()  > lastArmedAwayTime &&
+                                      lastArmedAwayTime  > lastArmedHomeTime &&
+                                      lastArmedAwayTime  > lastDisarmedTime &&
+                                      lastArmedAwayTime  > lastPendingTime
                                     ) {
+                                      Serial << ReceivedSignal[j][0].toInt() << " rec_timestamp " << ReceivedSignal[j][1] << " arrayaway " << arrayAway[i] << " timestamp " << lastArmedAwayTime << endl;
+
                                         alarmStateOld = alarmState;
                                         alarmState = alarmStates[3];
                                         alarmStateTarget = alarmStates[4];
                                         pendingCounter = millis();
                                         pendingStatusSent = false;
-                                        Homie.getLogger() << "〽 awayCheck()" << endl <<  " • alarmState was: " << alarmStateOld << " is: " << alarmState << " will be: "  << alarmStateTarget << endl;
+                                        Homie.getLogger() << "〽 awayCheck()" << endl;
+                                        Homie.getLogger() << " • alarmState was: " << alarmStateOld << " is: " << alarmState << " will be: "  << alarmStateTarget << endl;
                                 }
                         }
                 }
@@ -118,39 +124,31 @@ void triggeredCheck(){
                 }
         }
 }
-
-
-void getSensorArmAway() {
-        String alarmArrayConfig = sensorArrayAwaySetting.get(); // away:[123,234,345,456,567];home:[987,876];rest:[564]
-        String armAway = "";
-        unsigned long arrayAway[] = {0};
-        String armHome = "";
-
-        String armRest = "";
-        int from = 0;
-        int fromSub = 0;
-        int arraySize = 0;
-        for (int i = 0; i < alarmArrayConfig.length(); i++) {
-                if (alarmArrayConfig.substring(i, i + 5) == ";home") {
-                        armAway = alarmArrayConfig.substring(from + 5, i + 1);
-                        from = i + 5;
-                        for (int j = 0; j < armAway.length(); j++) {
-                                fromSub = 0;
-                                arraySize = 0;
-                                if (armAway.substring(j, j + 1) == ",") {
-                                        arrayAway[arraySize] = armAway.substring(fromSub,j).toInt();
-                                        fromSub = j;
-                                        arraySize++;
-                                }
-                        }
+void getSensorArrayAway() {
+        String str = sensorArrayAwaySetting.get();
+        int str_len = str.length() + 1;
+        char char_array[str_len];
+        str.toCharArray(char_array, str_len);
+        int ipos = 0;
+        char *tok = strtok(char_array, ",");
+        while (tok) {
+                if (ipos < 10) {
+                        arrayAway[ipos++] = atoi(tok);
                 }
-                if (alarmArrayConfig.substring(i, i + 5) == ";rest" ) {
-                        armHome = alarmArrayConfig.substring(from, i + 1);
-                        from = i + 5;
-                }
-
-                // armRest = alarmArrayConfig.substring(from, alarmArrayConfig.length());
-                // from = 0;
+                tok = strtok(NULL, ",");
         }
-
+}
+void getSensorArrayHome() {
+        String str = sensorArrayHomeSetting.get();
+        int str_len = str.length() + 1;
+        char char_array[str_len];
+        str.toCharArray(char_array, str_len);
+        int ipos = 0;
+        char *tok = strtok(char_array, ",");
+        while (tok) {
+                if (ipos < 10) {
+                        arrayHome[ipos++] = atoi(tok);
+                }
+                tok = strtok(NULL, ",");
+        }
 }

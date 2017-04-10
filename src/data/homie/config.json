@@ -17,8 +17,7 @@
     "enabled": true
   },
   "settings": {
-    "alarmSensors": "away:[123,234,345,456,567];home:[987,876];other[564]",
-    "arrayAway": "13980949,2025705,123123123,987978987,456456",
+    "arrayAway": "13980949,2025705",
     "arrayHome": "2025705",
     "channels": "pir-1:[13980949];door-1:[2025705];example:[1398097,1398100]"
   }

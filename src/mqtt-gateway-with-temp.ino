@@ -11,9 +11,9 @@
 #define DHT_PIN 4
 #define DHT_TYPE DHT11
 #define DHT_INTERVAL 300                 // in seconds
-#define ALARM_INTERVAL 60               // in seconds
+#define ALARM_INTERVAL 6              // in seconds
 #define TIME_AVOID_DUPLICATE 3          // in seconds
-#define TIME_TO_TRIGGER 30              // in seconds
+#define TIME_TO_TRIGGER 3              // in seconds
 
 // Alarm
 String ReceivedSignal[10][3] ={{"N/A", "N/A", "N/A"},{"N/A", "N/A", "N/A"},{"N/A", "N/A", "N/A"},{"N/A", "N/A", "N/A"},{"N/A", "N/A", "N/A"},
@@ -32,11 +32,9 @@ long pendingCounter = 0;
 bool pendingStatusSent = true;
 long initialAlarmState = 0;
 long initialAlarmStateTime = 0;
+long arrayHome[10] = {0,0,0,0,0,0,0,0,0,0};
+long arrayAway[10] = {0,0,0,0,0,0,0,0,0,0};
 
-#define SENSOR_ARRAY_AWAY_SIZE 2
-#define SENSOR_ARRAY_HOME_SIZE 1
-unsigned long sensorArrayAway [SENSOR_ARRAY_AWAY_SIZE] = {13980949,2025705};
-unsigned long sensorArrayHome [SENSOR_ARRAY_HOME_SIZE] = {2025705};
 
 // RF Switch
 RCSwitch mySwitch = RCSwitch();
@@ -65,7 +63,8 @@ HomieSetting<const char*> sensorArrayHomeSetting("arrayHome", "list of sensor fo
 
 void setupHandler() {
         temperatureNode.setProperty("unit").send("C");
-        getSensorArmAway();
+        getSensorArrayAway();
+        getSensorArrayHome();
 }
 void loopHandler() {
 //Alarm loop
@@ -124,7 +123,7 @@ void loopHandler() {
                 }
 
         }
-
+delay(100);
 
 }
 
@@ -134,7 +133,7 @@ void loopHandler() {
 
 // MQTT -> 433 loop
 bool rfSwitchOnHandler(const HomieRange& range, const String& value) {
-  Homie.getLogger() << "〽 rfSwitchOnHandler(range," << value << ")" << endl;
+        Homie.getLogger() << "〽 rfSwitchOnHandler(range," << value << ")" << endl;
         long int data = 0;
         int pulseLength = 350;
         if (value.indexOf(',') > 0) {
@@ -146,13 +145,13 @@ bool rfSwitchOnHandler(const HomieRange& range, const String& value) {
         Homie.getLogger() << " • Receiving MQTT > 433Mhz pulseLength: " << pulseLength << " value: " << data << endl;
         mySwitch.setPulseLength(pulseLength);
         mySwitch.send(data, 24);
-boolean result = rfSwitchNode.setProperty("on").send(String(data));
-  if (result) Homie.getLogger() << " • 433Mhz pulseLength: " << pulseLength << "  value: " << data << " sent"<< endl;
+        boolean result = rfSwitchNode.setProperty("on").send(String(data));
+        if (result) Homie.getLogger() << " • 433Mhz pulseLength: " << pulseLength << "  value: " << data << " sent"<< endl;
         return true;
 }
 // MQTT -> Alarm status loop
 bool alarmSwitchOnHandler(const HomieRange& range, const String& value) {
-    Homie.getLogger() << "〽 alarmSwitchOnHandler(range," << value << ")" << endl;
+        Homie.getLogger() << "〽 alarmSwitchOnHandler(range," << value << ")" << endl;
         String data = value.c_str();
         Homie.getLogger() << " • Receiving MQTT alarm status: " << data << endl;
         setAlarmState(data);
@@ -160,7 +159,7 @@ bool alarmSwitchOnHandler(const HomieRange& range, const String& value) {
 }
 // MQTT -> IR loop
 bool irSwitchOnHandler(const HomieRange& range, const String& value) {
-      Homie.getLogger() << "〽 irSwitchOnHandler(range," << value << ")" << endl;
+        Homie.getLogger() << "〽 irSwitchOnHandler(range," << value << ")" << endl;
         long int data = 0;
         String irProtocol = "IR_NEC";
         if (value.indexOf(',') > 0) {

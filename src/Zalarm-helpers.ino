@@ -121,29 +121,36 @@ void triggeredCheck(){
 
 
 void getSensorArmAway() {
-        String mappingConfig = sensorArrayAwaySetting.get(); //13980949,2025705
-        //  String mapping = "";
-        String codes = "";
-        String codes2 = "";
-        String codes3[] = {};
-        int lastCodeIndex = 0;
-        int arrayCount = 0;
-        codes = mappingConfig.substring(0, mappingConfig.length() );
-        Serial << "........." << codes << "-----------" << endl;
+        String alarmArrayConfig = sensorArrayAwaySetting.get(); // away:[123,234,345,456,567];home:[987,876];rest:[564]
+        String armAway = "";
+        unsigned long arrayAway[] = {0};
+        String armHome = "";
 
-        for (int j = 0; j < mappingConfig.length(); j++) {
-                if (mappingConfig.substring(j, j + 1) == ",") {
-                        codes3[arrayCount] = mappingConfig.substring(lastCodeIndex, j);
-                        lastCodeIndex = j;
-                        arrayCount = 1;
-                        Serial << "........." << "-----------" << codes2 << endl;
+        String armRest = "";
+        int from = 0;
+        int fromSub = 0;
+        int arraySize = 0;
+        for (int i = 0; i < alarmArrayConfig.length(); i++) {
+                if (alarmArrayConfig.substring(i, i + 5) == ";home") {
+                        armAway = alarmArrayConfig.substring(from + 5, i + 1);
+                        from = i + 5;
+                        for (int j = 0; j < armAway.length(); j++) {
+                                fromSub = 0;
+                                arraySize = 0;
+                                if (armAway.substring(j, j + 1) == ",") {
+                                        arrayAway[arraySize] = armAway.substring(fromSub,j).toInt();
+                                        fromSub = j;
+                                        arraySize++;
+                                }
+                        }
                 }
+                if (alarmArrayConfig.substring(i, i + 5) == ";rest" ) {
+                        armHome = alarmArrayConfig.substring(from, i + 1);
+                        from = i + 5;
+                }
+
+                // armRest = alarmArrayConfig.substring(from, alarmArrayConfig.length());
+                // from = 0;
         }
-        //  if (currentCode.indexOf(codes) > -1) {
-        //return mapping.substring(0, mapping.indexOf(':'));;
-        //}
-        //  lastIndex = i + 1;
-
-
 
 }

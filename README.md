@@ -55,5 +55,5 @@ TODO
 ## Credits
 
 - 1 Technophile's [433toMQTTto433](https://1technophile.blogspot.de/2016/09/433tomqttto433-bidirectional-esp8266.html)
-- Mhaack (https://github.com/mhaack/mqtt-433mhz-gateway-homie)
+- Mhaack [https://github.com/mhaack/mqtt-433mhz-gateway-homie]
 

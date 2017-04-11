@@ -25,7 +25,7 @@ void setAlarmState(String value){
         if (value == "pending") {
                 alarmStateOld = alarmState;
                 alarmState = alarmStates[3];
-                alarmStateTarget = alarmStateOld;
+                alarmStateTarget = alarmStates[0];
                 pendingCounter = millis();
                 pendingStatusSent = false;
                 lastPendingTime =  millis();
@@ -101,14 +101,14 @@ void awayCheck(){
 }
 void pendingCheck(){
         if (alarmState == alarmStates[3]) {
-
                 if (millis() > (pendingCounter + TIME_TO_TRIGGER * 1000UL)) {
                         if (pendingCounter > 0) {
-                                if (alarmState != alarmStates[3]) {
+
                                         alarmState = alarmStateTarget;
                                         alarmNode.setProperty("state").send(alarmState);
                                         Homie.getLogger() << "〽 pendingCheck()" << endl <<  " • alarmState was: " << alarmStateOld << " is: " << alarmState << endl;
-                                }
+
+
                                 if(alarmState == alarmStates[0]) {lastDisarmedTime = millis();}
                                 if(alarmState == alarmStates[1]) {lastArmedHomeTime = millis();}
                                 if(alarmState == alarmStates[2]) {lastArmedAwayTime = millis();}

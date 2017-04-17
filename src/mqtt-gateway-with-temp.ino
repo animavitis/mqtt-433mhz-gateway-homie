@@ -3,7 +3,7 @@
 #include <RCSwitch.h>
 #include <DHT.h>
 
-#define RF_EMITTER_PIN 12
+#define RF_EMITTER_PIN 15
 #define RF_RECEIVER_PIN 5
 #define RF_EMITTER_REPEAT 20
 #define IR_EMITTER_PIN 14
@@ -11,9 +11,9 @@
 #define DHT_PIN 4
 #define DHT_TYPE DHT11
 #define DHT_INTERVAL 300                 // in seconds
-#define ALARM_INTERVAL 6              // in seconds
+#define ALARM_INTERVAL 60              // in seconds
 #define TIME_AVOID_DUPLICATE 3          // in seconds
-#define TIME_TO_TRIGGER 3              // in seconds
+#define TIME_TO_TRIGGER 30              // in seconds
 
 // Alarm
 String ReceivedSignal[10][3] ={{"N/A", "N/A", "N/A"},{"N/A", "N/A", "N/A"},{"N/A", "N/A", "N/A"},{"N/A", "N/A", "N/A"},{"N/A", "N/A", "N/A"},
@@ -34,7 +34,7 @@ long initialAlarmState = 0;
 long initialAlarmStateTime = 0;
 long arrayHome[10] = {0,0,0,0,0,0,0,0,0,0};
 long arrayAway[10] = {0,0,0,0,0,0,0,0,0,0};
-
+int arrayMQTT[6] = {0,0,0,0,0,0};
 
 // RF Switch
 RCSwitch mySwitch = RCSwitch();
@@ -80,7 +80,7 @@ void loopHandler() {
         triggeredCheck();
 // DHT temp loop
         if (millis() - DHTlastSent >= DHT_INTERVAL * 1000UL || DHTlastSent == 0) {
-                Homie.getLogger() << "〽 DTH loop:" << endl;
+                //              Homie.getLogger() << "〽 DTH loop:" << endl;
                 float humidity = dht.readHumidity();
                 float temperature = dht.readTemperature();
                 float heatIndex = dht.computeHeatIndex(temperature, humidity, false);
@@ -97,8 +97,11 @@ void loopHandler() {
 // 433 -> MQTT loop
         if (mySwitch.available()) {
                 long data = mySwitch.getReceivedValue();
-                Homie.getLogger() << "〽 433Mhz loop:" << endl;
-                Homie.getLogger() << " • Receiving 433Mhz value: " << mySwitch.getReceivedValue() << " bitLenght: " << mySwitch.getReceivedBitlength() << " protocol: " << mySwitch.getReceivedProtocol() << endl;
+                //              Homie.getLogger() << "〽 433Mhz loop:" << endl;
+                Homie.getLogger() << " • Receiving 433Mhz value: " << mySwitch.getReceivedValue();
+                Homie.getLogger() << " bitLenght: " << mySwitch.getReceivedBitlength();
+                Homie.getLogger() << " protocol: " << mySwitch.getReceivedProtocol();
+                Homie.getLogger() << " delay: " << mySwitch.getReceivedDelay() << endl;
                 mySwitch.resetAvailable();
                 String currentCode = String(data);
                 if (!isAduplicate(currentCode) && currentCode!=0) {
@@ -110,7 +113,7 @@ void loopHandler() {
         }
 // IR -> MQTT loop
         if (irrecv.decode(&results)) {
-                Homie.getLogger() << "〽 IR loop:" << endl;
+                //              Homie.getLogger() << "〽 IR loop:" << endl;
                 long data = results.value;
                 irrecv.resume();
                 Homie.getLogger() << " • Receiving IR signal: " << data << endl;
@@ -121,32 +124,47 @@ void loopHandler() {
                         boolean result = receiverNode.setProperty("ir-" + channelId).send(currentCode);
                         if (result) storeValue(currentCode);
                 }
-
         }
-delay(100);
-
+        delay(50);
 }
-
-
-
-
-
 // MQTT -> 433 loop
 bool rfSwitchOnHandler(const HomieRange& range, const String& value) {
         Homie.getLogger() << "〽 rfSwitchOnHandler(range," << value << ")" << endl;
-        long int data = 0;
-        int pulseLength = 350;
-        if (value.indexOf(',') > 0) {
-                pulseLength = atoi(value.substring(0, value.indexOf(',')).c_str());
-                data = atoi(value.substring(value.indexOf(',') + 1).c_str());
-        } else {
-                data = atoi(value.c_str());
+        arrayMQTT[0] = 0;     //data or address
+        arrayMQTT[1] = 350;   //pulseLength
+        arrayMQTT[2] = 1;     //protocol
+        arrayMQTT[3] = 0;     //group (1-> send to all group) (only for typeE)
+        arrayMQTT[4] = 0;     //unit (15 first, 14 second, 13 third) (only for typeE)
+        arrayMQTT[5] = 1;     //1:set ON,2:set OFF (only for typeE)
+
+        getArrayMQTT(value);
+
+        mySwitch.setPulseLength(arrayMQTT[1]);
+        mySwitch.setProtocol(arrayMQTT[2]);
+
+        if (arrayMQTT[0] > 0 && arrayMQTT[4] == 0) {
+                Homie.getLogger() << " • Receiving MQTT > 433Mhz pulseLength: " << arrayMQTT[1] << " protocol: "<< arrayMQTT[2] <<" value: " << arrayMQTT[0] << endl;
+                mySwitch.send(arrayMQTT[0], 24);
         }
-        Homie.getLogger() << " • Receiving MQTT > 433Mhz pulseLength: " << pulseLength << " value: " << data << endl;
-        mySwitch.setPulseLength(pulseLength);
-        mySwitch.send(data, 24);
-        boolean result = rfSwitchNode.setProperty("on").send(String(data));
-        if (result) Homie.getLogger() << " • 433Mhz pulseLength: " << pulseLength << "  value: " << data << " sent"<< endl;
+        if (arrayMQTT[0] > 0 && arrayMQTT[3] == 0 && arrayMQTT[4] > 0) {
+                Homie.getLogger() << " • Receiving MQTT > 433Mhz Address: " << arrayMQTT[0] << " unit: "<< arrayMQTT[4] <<" group: false" << endl;
+                if(arrayMQTT[5] == 1) {
+                        mySwitch.switchOn(arrayMQTT[0], false, arrayMQTT[4]);
+                } else {
+                        mySwitch.switchOff(arrayMQTT[0],false, arrayMQTT[4]);
+                }
+        }
+        if (arrayMQTT[0] > 0 && arrayMQTT[3] == 1 && arrayMQTT[4] > 0) {
+                Homie.getLogger() << " • Receiving MQTT > 433Mhz Address: " << arrayMQTT[0] << " unit: "<< arrayMQTT[4] <<" group: true" << endl;
+
+                if(arrayMQTT[5] == 1) {
+                        mySwitch.switchOn(arrayMQTT[0], false, arrayMQTT[4]);
+                } else {
+                        mySwitch.switchOff(arrayMQTT[0],false, arrayMQTT[4]);
+                }
+        }
+        boolean result = rfSwitchNode.setProperty("on").send(String(arrayMQTT[0]));
+        if (result) Homie.getLogger() << " • 433Mhz pulseLength: " << arrayMQTT[1] << "  value: " << arrayMQTT[0] << " sent"<< endl;
         return true;
 }
 // MQTT -> Alarm status loop
@@ -160,41 +178,41 @@ bool alarmSwitchOnHandler(const HomieRange& range, const String& value) {
 // MQTT -> IR loop
 bool irSwitchOnHandler(const HomieRange& range, const String& value) {
         Homie.getLogger() << "〽 irSwitchOnHandler(range," << value << ")" << endl;
-        long int data = 0;
-        String irProtocol = "IR_NEC";
-        if (value.indexOf(',') > 0) {
-                irProtocol = atoi(value.substring(0, value.indexOf(',')).c_str());
-                data = atoi(value.substring(value.indexOf(',') + 1).c_str());
-        } else {
-                data = atoi(value.c_str());
-        }
-        Homie.getLogger() << " • Receiving MQTT > IR Protocol: " << irProtocol << " value: " << data << endl;
+        arrayMQTT[0] = 0; //data or address
+        arrayMQTT[1] = 1; // IR protocol: 0:IR_COOLIX,1:IR_NEC,2:IR_Whynter,3:IR_LG,4:IR_Sony,5:IR_DISH,6:IR_RC5,7:IR_Sharp,8:IR_SAMSUNG
+        arrayMQTT[2] = 0; //not used
+        arrayMQTT[3] = 0; //not used
+        arrayMQTT[4] = 0; //not used
+        arrayMQTT[5] = 0; //not used
+
+        getArrayMQTT(value);
+
+        Homie.getLogger() << " • Receiving MQTT > IR Protocol: " << arrayMQTT[1] << " value: " << arrayMQTT[0] << endl;
         boolean signalSent = false;
-        if (irProtocol == "IR_COOLIX") {irsend.sendCOOLIX(data, 24);
-                                        signalSent = true;}
-        if (irProtocol == "IR_NEC") {irsend.sendNEC(data, 32);
-                                     signalSent = true;}
-        if (irProtocol == "IR_Whynter") {irsend.sendWhynter(data, 32);
-                                         signalSent = true;}
-        if (irProtocol == "IR_LG") {irsend.sendLG(data, 28);
-                                    signalSent = true;}
-        if (irProtocol == "IR_Sony") {irsend.sendSony(data, 12);
-                                      signalSent = true;}
-        if (irProtocol == "IR_DISH") {irsend.sendDISH(data, 16);
-                                      signalSent = true;}
-        if (irProtocol == "IR_RC5") {irsend.sendRC5(data, 12);
-                                     signalSent = true;}
-        if (irProtocol == "IR_Sharp") {irsend.sendSharpRaw(data, 15);
-                                       signalSent = true;}
-        if (irProtocol == "IR_SAMSUNG") {irsend.sendSAMSUNG(data, 32);
-                                         signalSent = true;}
+        if (arrayMQTT[1] == 0) {irsend.sendCOOLIX(arrayMQTT[0], 24);
+                                signalSent = true;}
+        if (arrayMQTT[1] == 1) {irsend.sendNEC(arrayMQTT[0], 32);
+                                signalSent = true;}
+        if (arrayMQTT[1] == 2) {irsend.sendWhynter(arrayMQTT[0], 32);
+                                signalSent = true;}
+        if (arrayMQTT[1] == 3) {irsend.sendLG(arrayMQTT[0], 28);
+                                signalSent = true;}
+        if (arrayMQTT[1] == 4) {irsend.sendSony(arrayMQTT[0], 12);
+                                signalSent = true;}
+        if (arrayMQTT[1] == 5) {irsend.sendDISH(arrayMQTT[0], 16);
+                                signalSent = true;}
+        if (arrayMQTT[1] == 6) {irsend.sendRC5(arrayMQTT[0], 12);
+                                signalSent = true;}
+        if (arrayMQTT[1] == 7) {irsend.sendSharpRaw(arrayMQTT[0], 15);
+                                signalSent = true;}
+        if (arrayMQTT[1] == 8) {irsend.sendSAMSUNG(arrayMQTT[0], 32);
+                                signalSent = true;}
         if (signalSent) {
-                boolean result = irSwitchNode.setProperty("on").send(String(data));
-                if (result) Homie.getLogger() << " • IR protocol: " << irProtocol << " value: " << data << " sent"<< endl;
-                irrecv.enableIRIn();
-                return true;
+                boolean result = rfSwitchNode.setProperty("on").send(String(arrayMQTT[0]));
+                if (result) Homie.getLogger() << " • IR protocol: " << arrayMQTT[1] << "  value: " << arrayMQTT[0] << " sent"<< endl;
         }
         irrecv.enableIRIn();
+        return true;
 }
 void setup() {
         Serial.begin(115200);

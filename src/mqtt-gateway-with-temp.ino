@@ -130,6 +130,7 @@ void loopHandler() {
 // MQTT -> 433 loop
 bool rfSwitchOnHandler(const HomieRange& range, const String& value) {
         Homie.getLogger() << "〽 rfSwitchOnHandler(range," << value << ")" << endl;
+        bool result = false;
         arrayMQTT[0] = 0;     //data or address
         arrayMQTT[1] = 350;   //pulseLength
         arrayMQTT[2] = 1;     //protocol
@@ -163,7 +164,11 @@ bool rfSwitchOnHandler(const HomieRange& range, const String& value) {
                         mySwitch.switchOff(arrayMQTT[0],false, arrayMQTT[4]);
                 }
         }
-        boolean result = rfSwitchNode.setProperty("on").send(String(arrayMQTT[0]));
+        if(arrayMQTT[5] == 1) {
+                boolean result = rfSwitchNode.setProperty("on").send(String(arrayMQTT[0]));
+        } else {
+                boolean result = rfSwitchNode.setProperty("off").send(String(arrayMQTT[0]));
+        }
         if (result) Homie.getLogger() << " • 433Mhz pulseLength: " << arrayMQTT[1] << "  value: " << arrayMQTT[0] << " sent"<< endl;
         return true;
 }
@@ -238,6 +243,7 @@ void setup() {
         receiverNode.advertise("ir-0");
         irSwitchNode.advertise("on").settable(irSwitchOnHandler);
         rfSwitchNode.advertise("on").settable(rfSwitchOnHandler);
+        rfSwitchNode.advertise("off").settable(rfSwitchOnHandler);
         temperatureNode.advertise("unit");
         temperatureNode.advertise("temperature");
         temperatureNode.advertise("heatIndex");

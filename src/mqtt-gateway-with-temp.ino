@@ -36,6 +36,23 @@ long arrayHome[10] = {0,0,0,0,0,0,0,0,0,0};
 long arrayAway[10] = {0,0,0,0,0,0,0,0,0,0};
 int arrayMQTT[6] = {0,0,0,0,0,0};
 
+//Avoid duplicate of RF signals for multiple gateway installations
+AsyncMqttClient& mqttClient = Homie.getMqttClient();
+void onMqttMessage(char* topic, char* payload, AsyncMqttClientMessageProperties properties, size_t len, size_t index, size_t total) {
+        Homie.getLogger() << " - Recieving toMQTT topic:" << endl;
+        Homie.getLogger() <<" -- topic: " << topic << " payload: " << payload << endl;
+        long duplicteMQTT = 0;
+        storeValue(payload);
+}
+void onHomieEvent(const HomieEvent& event) {
+        switch(event.type) {
+        case HomieEventType::MQTT_CONNECTED:
+                uint16_t packetIdSub = mqttClient.subscribe("anima/+/toMQTT/rf/+", 0);
+                Homie.getLogger() << " - Subscribing at QoS 0, packetId: " << packetIdSub;
+                break;
+        }
+}
+
 // RF Switch
 RCSwitch mySwitch = RCSwitch();
 
@@ -59,7 +76,7 @@ HomieNode temperatureNode("DHT", "temperature");
 // HomieSetting<double> temperatureOffsetSetting("temperatureOffset", "The temperature offset in degrees");
 HomieSetting<const char*> channelMappingSetting("channels", "Mapping of 433MHz & IR signals to mqtt channel.");
 HomieSetting<const char*> sensorArrayAwaySetting("arrayAway", "list of sensor for arm away");
-HomieSetting<const char*> sensorArrayHomeSetting("arrayHome", "list of sensor for arm away");
+HomieSetting<const char*> sensorArrayHomeSetting("arrayHome", "list of sensor for arm home");
 
 void setupHandler() {
         temperatureNode.setProperty("unit").send("C");
@@ -80,7 +97,7 @@ void loopHandler() {
         triggeredCheck();
 // DHT temp loop
         if (millis() - DHTlastSent >= DHT_INTERVAL * 1000UL || DHTlastSent == 0) {
-                //              Homie.getLogger() << "〽 DTH loop:" << endl;
+                //              Homie.getLogger() << " - DTH loop:" << endl;
                 float humidity = dht.readHumidity();
                 float temperature = dht.readTemperature();
                 float heatIndex = dht.computeHeatIndex(temperature, humidity, false);
@@ -89,16 +106,16 @@ void loopHandler() {
                         temperatureNode.setProperty("temperature").send(String(temperature));
                         temperatureNode.setProperty("heatIndex").send(String(heatIndex));
                         temperatureNode.setProperty("humidity").send(String(temperature));
-                        Homie.getLogger() << " • temp: " << temperature << " humidity: " << humidity << " heatindex: " << heatIndex << endl;
+                        Homie.getLogger() << " -- temp: " << temperature << " humidity: " << humidity << " heatindex: " << heatIndex << endl;
                 } else {
-                        Homie.getLogger() << " • DTH sensor failed" << endl;
+                        Homie.getLogger() << " -- DTH sensor failed" << endl;
                 }
         }
 // 433 -> MQTT loop
         if (mySwitch.available()) {
                 long data = mySwitch.getReceivedValue();
-                //              Homie.getLogger() << "〽 433Mhz loop:" << endl;
-                Homie.getLogger() << " • Receiving 433Mhz value: " << mySwitch.getReceivedValue();
+                //              Homie.getLogger() << " - 433Mhz loop:" << endl;
+                Homie.getLogger() << " -- Receiving 433Mhz value: " << mySwitch.getReceivedValue();
                 Homie.getLogger() << " bitLenght: " << mySwitch.getReceivedBitlength();
                 Homie.getLogger() << " protocol: " << mySwitch.getReceivedProtocol();
                 Homie.getLogger() << " delay: " << mySwitch.getReceivedDelay() << endl;
@@ -106,22 +123,22 @@ void loopHandler() {
                 String currentCode = String(data);
                 if (!isAduplicate(currentCode) && currentCode!=0) {
                         String channelId = getChannelByCode(currentCode);
-                        Homie.getLogger() << " • Code: " << currentCode << " matched to channel " << channelId << endl;
-                        boolean result = receiverNode.setProperty("rf-" + channelId).send(currentCode);
+                        Homie.getLogger() << " -- Code: " << currentCode << " matched to channel " << channelId << endl;
+                        boolean result = receiverNode.setProperty("rf" + channelId).send(currentCode);
                         if (result) storeValue(currentCode);
                 }
         }
 // IR -> MQTT loop
         if (irrecv.decode(&results)) {
-                //              Homie.getLogger() << "〽 IR loop:" << endl;
+                //              Homie.getLogger() << " - IR loop:" << endl;
                 long data = results.value;
                 irrecv.resume();
-                Homie.getLogger() << " • Receiving IR signal: " << data << endl;
+                Homie.getLogger() << " -- Receiving IR signal: " << data << endl;
                 String currentCode = String(data);
                 if (!isAduplicate(currentCode) && currentCode!=0) {
                         String channelId = getChannelByCode(currentCode);
-                        Homie.getLogger() << " • Code: " << currentCode << " matched to channel " << channelId << endl;
-                        boolean result = receiverNode.setProperty("ir-" + channelId).send(currentCode);
+                        Homie.getLogger() << " -- Code: " << currentCode << " matched to channel " << channelId << endl;
+                        boolean result = receiverNode.setProperty("ir/" + channelId).send(currentCode);
                         if (result) storeValue(currentCode);
                 }
         }
@@ -129,7 +146,7 @@ void loopHandler() {
 }
 // MQTT -> 433 loop
 bool rfSwitchOnHandler(const HomieRange& range, const String& value) {
-        Homie.getLogger() << "〽 rfSwitchOnHandler(range," << value << ")" << endl;
+        Homie.getLogger() << " - rfSwitchOnHandler(range," << value << ")" << endl;
         bool result = false;
         arrayMQTT[0] = 0;     //data or address
         arrayMQTT[1] = 350;   //pulseLength
@@ -144,11 +161,11 @@ bool rfSwitchOnHandler(const HomieRange& range, const String& value) {
         mySwitch.setProtocol(arrayMQTT[2]);
 
         if (arrayMQTT[0] > 0 && arrayMQTT[4] == 0) {
-                Homie.getLogger() << " • Receiving MQTT > 433Mhz pulseLength: " << arrayMQTT[1] << " protocol: "<< arrayMQTT[2] <<" value: " << arrayMQTT[0] << endl;
+                Homie.getLogger() << " -- Receiving MQTT > 433Mhz pulseLength: " << arrayMQTT[1] << " protocol: "<< arrayMQTT[2] <<" value: " << arrayMQTT[0] << endl;
                 mySwitch.send(arrayMQTT[0], 24);
         }
         if (arrayMQTT[0] > 0 && arrayMQTT[3] == 0 && arrayMQTT[4] > 0) {
-                Homie.getLogger() << " • Receiving MQTT > 433Mhz Address: " << arrayMQTT[0] << " unit: "<< arrayMQTT[4] <<" group: false" << endl;
+                Homie.getLogger() << " -- Receiving MQTT > 433Mhz Address: " << arrayMQTT[0] << " unit: "<< arrayMQTT[4] <<" group: false" << endl;
                 if(arrayMQTT[5] == 1) {
                         mySwitch.switchOn(arrayMQTT[0], false, arrayMQTT[4]);
                 } else {
@@ -156,7 +173,7 @@ bool rfSwitchOnHandler(const HomieRange& range, const String& value) {
                 }
         }
         if (arrayMQTT[0] > 0 && arrayMQTT[3] == 1 && arrayMQTT[4] > 0) {
-                Homie.getLogger() << " • Receiving MQTT > 433Mhz Address: " << arrayMQTT[0] << " unit: "<< arrayMQTT[4] <<" group: true" << endl;
+                Homie.getLogger() << " -- Receiving MQTT > 433Mhz Address: " << arrayMQTT[0] << " unit: "<< arrayMQTT[4] <<" group: true" << endl;
 
                 if(arrayMQTT[5] == 1) {
                         mySwitch.switchOn(arrayMQTT[0], false, arrayMQTT[4]);
@@ -169,20 +186,20 @@ bool rfSwitchOnHandler(const HomieRange& range, const String& value) {
         } else {
                 boolean result = rfSwitchNode.setProperty("off").send(String(arrayMQTT[0]));
         }
-        if (result) Homie.getLogger() << " • 433Mhz pulseLength: " << arrayMQTT[1] << "  value: " << arrayMQTT[0] << " sent"<< endl;
+        if (result) Homie.getLogger() << " -- 433Mhz pulseLength: " << arrayMQTT[1] << "  value: " << arrayMQTT[0] << " sent"<< endl;
         return true;
 }
 // MQTT -> Alarm status loop
 bool alarmSwitchOnHandler(const HomieRange& range, const String& value) {
-        Homie.getLogger() << "〽 alarmSwitchOnHandler(range," << value << ")" << endl;
+        Homie.getLogger() << " - alarmSwitchOnHandler(range," << value << ")" << endl;
         String data = value.c_str();
-        Homie.getLogger() << " • Receiving MQTT alarm status: " << data << endl;
+        Homie.getLogger() << " -- Receiving MQTT alarm status: " << data << endl;
         setAlarmState(data);
         return true;
 }
 // MQTT -> IR loop
 bool irSwitchOnHandler(const HomieRange& range, const String& value) {
-        Homie.getLogger() << "〽 irSwitchOnHandler(range," << value << ")" << endl;
+        Homie.getLogger() << " - irSwitchOnHandler(range," << value << ")" << endl;
         arrayMQTT[0] = 0; //data or address
         arrayMQTT[1] = 1; // IR protocol: 0:IR_COOLIX,1:IR_NEC,2:IR_Whynter,3:IR_LG,4:IR_Sony,5:IR_DISH,6:IR_RC5,7:IR_Sharp,8:IR_SAMSUNG
         arrayMQTT[2] = 0; //not used
@@ -192,7 +209,7 @@ bool irSwitchOnHandler(const HomieRange& range, const String& value) {
 
         getArrayMQTT(value);
 
-        Homie.getLogger() << " • Receiving MQTT > IR Protocol: " << arrayMQTT[1] << " value: " << arrayMQTT[0] << endl;
+        Homie.getLogger() << " -- Receiving MQTT > IR Protocol: " << arrayMQTT[1] << " value: " << arrayMQTT[0] << endl;
         boolean signalSent = false;
         if (arrayMQTT[1] == 0) {irsend.sendCOOLIX(arrayMQTT[0], 24);
                                 signalSent = true;}
@@ -214,11 +231,13 @@ bool irSwitchOnHandler(const HomieRange& range, const String& value) {
                                 signalSent = true;}
         if (signalSent) {
                 boolean result = rfSwitchNode.setProperty("on").send(String(arrayMQTT[0]));
-                if (result) Homie.getLogger() << " • IR protocol: " << arrayMQTT[1] << "  value: " << arrayMQTT[0] << " sent"<< endl;
+                if (result) Homie.getLogger() << " -- IR protocol: " << arrayMQTT[1] << "  value: " << arrayMQTT[0] << " sent"<< endl;
         }
         irrecv.enableIRIn();
         return true;
 }
+
+
 void setup() {
         Serial.begin(115200);
         Homie.getLogger() << endl << endl;
@@ -239,8 +258,8 @@ void setup() {
         Homie.setSetupFunction(setupHandler).setLoopFunction(loopHandler);
         //    Homie.disableResetTrigger();
         alarmNode.advertise("state").settable(alarmSwitchOnHandler);
-        receiverNode.advertise("rf-0");
-        receiverNode.advertise("ir-0");
+        receiverNode.advertise("rf");
+        receiverNode.advertise("ir");
         irSwitchNode.advertise("on").settable(irSwitchOnHandler);
         rfSwitchNode.advertise("on").settable(rfSwitchOnHandler);
         rfSwitchNode.advertise("off").settable(rfSwitchOnHandler);
@@ -249,7 +268,12 @@ void setup() {
         temperatureNode.advertise("heatIndex");
         temperatureNode.advertise("humidity");
 
+        // Avoid duplicate of RF signals for multiple gateway installations
+        Homie.onEvent(onHomieEvent);
+        mqttClient.onMessage(onMqttMessage);
+
         // temperatureOffsetSetting.setDefaultValue(DEFAULT_TEMPERATURE_OFFSET);
+        Homie_setBrand("ainima");
         Homie.setup();
 }
 void loop() {

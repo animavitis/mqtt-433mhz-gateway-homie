@@ -39,7 +39,7 @@ void setAlarmState(String value){
                 lastPendingTime =  millis();
         }
         alarmNode.setProperty("state").send(alarmState);
-        Homie.getLogger() << "〽 setAlarmState("<<  value << ")" << endl <<  " • alarmState was: " << alarmStateOld << " is: " << alarmState << " will be: "  << alarmStateTarget << endl;
+        Homie.getLogger() << " - setAlarmState("<<  value << ")" << endl <<  " -- alarmState was: " << alarmStateOld << " is: " << alarmState << " will be: "  << alarmStateTarget << endl;
 }
 void setAlarmTimes(){
         lastArmedHomeTime = millis();
@@ -67,7 +67,7 @@ void homeCheck(){
                                         alarmStateTarget = alarmStates[4];
                                         pendingCounter = millis();
                                         pendingStatusSent = false;
-                                        Homie.getLogger() << "〽 homeCheck()" << endl <<  " • alarmState was: " << alarmStateOld << " is: " << alarmState << " will be: "  << alarmStateTarget << endl;
+                                        Homie.getLogger() << " - homeCheck()" << endl <<  " -- alarmState was: " << alarmStateOld << " is: " << alarmState << " will be: "  << alarmStateTarget << endl;
                                 }
                         }
                 }
@@ -92,8 +92,8 @@ void awayCheck(){
                                         alarmStateTarget = alarmStates[4];
                                         pendingCounter = millis();
                                         pendingStatusSent = false;
-                                        Homie.getLogger() << "〽 awayCheck()" << endl;
-                                        Homie.getLogger() << " • alarmState was: " << alarmStateOld << " is: " << alarmState << " will be: "  << alarmStateTarget << endl;
+                                        Homie.getLogger() << " - awayCheck()" << endl;
+                                        Homie.getLogger() << " -- alarmState was: " << alarmStateOld << " is: " << alarmState << " will be: "  << alarmStateTarget << endl;
                                 }
                         }
                 }
@@ -106,7 +106,7 @@ void pendingCheck(){
 
                                         alarmState = alarmStateTarget;
                                         alarmNode.setProperty("state").send(alarmState);
-                                        Homie.getLogger() << "〽 pendingCheck()" << endl <<  " • alarmState was: " << alarmStateOld << " is: " << alarmState << endl;
+                                        Homie.getLogger() << " - pendingCheck()" << endl <<  " -- alarmState was: " << alarmStateOld << " is: " << alarmState << endl;
 
 
                                 if(alarmState == alarmStates[0]) {lastDisarmedTime = millis();}
@@ -130,7 +130,7 @@ void triggeredCheck(){
                 if (millis() > (initialAlarmStateTime + (ALARM_INTERVAL * 1000UL)/4) || initialAlarmState == 0) {
                         initialAlarmStateTime = millis();
                         alarmNode.setProperty("state").send(alarmState);
-                        Homie.getLogger() << "〽 triggeredCheck()" << endl <<  " • alarmState was: " << alarmStateOld << " is: " << alarmState << endl;
+                        Homie.getLogger() << " - triggeredCheck()" << endl <<  " -- alarmState was: " << alarmStateOld << " is: " << alarmState << endl;
                         initialAlarmState = 1;
                 }
         }
